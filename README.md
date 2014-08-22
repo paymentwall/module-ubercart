@@ -8,3 +8,5 @@ Drupal is one of the leading CMS platforms in the world, ranking 3rd after Wordp
 #Installation
 To install Paymentwall Ubercart module, please follow the [instructions](https://www.paymentwall.com/en/documentation/Ubercart/831).
 
+After cloning repository do not forget install Paymentwall PHP API library (**required**):
+`git submodule init` and then `git submodule update`
