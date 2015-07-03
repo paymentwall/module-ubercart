@@ -164,6 +164,18 @@ function uc_paymentwall_form($form, &$form_state, $order) {
 }
 
 /**
+ * @param $data
+ * Init Paymentwall config
+ */
+function init_paymentwall_config($data){
+  Paymentwall_Config::getInstance()->set(array(
+      'api_type' => Paymentwall_Config::API_GOODS,
+      'public_key' => $data->app_key, // available in your Paymentwall merchant area
+      'private_key' => $data->secret_key // available in your Paymentwall merchant area
+  ));
+}
+
+/**
  * Complate order on example.com/paymentwall_complete
  */
 function uc_paymentwall_complete() {
@@ -173,7 +185,7 @@ function uc_paymentwall_complete() {
       drupal_goto();
       die();
       break;
-    
+
     case 'POST':
       if(isset($_SESSION['order'])) {
         require 'paymentwall_api/lib/paymentwall.php';
@@ -182,10 +194,7 @@ function uc_paymentwall_complete() {
                 ->fields('s', array('app_key', 'secret_key','widget_code'))
                 ->execute()
                 ->fetch();
-
-        Paymentwall_Base::setApiType(Paymentwall_Base::API_GOODS);
-        Paymentwall_Base::setAppKey($data->app_key);
-        Paymentwall_Base::setSecretKey($data->secret_key);
+        init_paymentwall_config($data);
 
         $products_name  = array();
         $order = unserialize(base64_decode($_SESSION['order']));
@@ -214,7 +223,8 @@ function uc_paymentwall_complete() {
               )
           ),
           array(
-            'email' => $order->primary_email
+            'email' => $order->primary_email,
+            'integration_module' => 'ubercart'
           )
         );
 
@@ -233,7 +243,7 @@ function uc_paymentwall_complete() {
         drupal_goto();
         die();
       }
-      
+
       break;
   }
 }
@@ -248,14 +258,15 @@ function uc_paymentwall_pingbackpayment() {
           ->execute()
           ->fetch();
 
-  Paymentwall_Base::setApiType(Paymentwall_Base::API_GOODS);
-  Paymentwall_Base::setAppKey($data->app_key);
-  Paymentwall_Base::setSecretKey($data->secret_key);
+  init_paymentwall_config($data);
 
-  $pingback = new Paymentwall_Pingback($_GET, $_SERVER['REMOTE_ADDR']);
+  $params = $_GET;
+  if (isset($params['q']) && $params['q'] != '') {
+      unset($params['q']);
+  }
+
+  $pingback = new Paymentwall_Pingback($params, $_SERVER['REMOTE_ADDR']);
   if ($pingback->validate()) {
-    $productId = $pingback->getProduct()->getId();
-
     $result = db_select('paymentwall_order_storage', 'os')
                 ->fields('os')
                 ->condition('uid', $pingback->getUserId())
