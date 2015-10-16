@@ -2,308 +2,339 @@
 
 /**
  * @file
- * Integrates shoping cart with Paymentwall services with Ubercart!
+ * Integrates shopping cart with Paymentwall services with Ubercart!
  */
+
+require 'lib/paymentwall-php/lib/paymentwall.php';
+
+define('UC_PAYMENT_METHOD_PAYMENTWALL', 'Paymentwall');
 
 /**
  * Implements hook_menu().
  */
-function uc_paymentwall_menu() {
-  $items = array();
+function uc_paymentwall_menu()
+{
+    $items = array();
 
-  $items['paymentwall_complete'] = array(
-    'title' => 'Paymentwall',
-    'page callback' => 'uc_paymentwall_complete',
-    'access arguments' => array('access content'),
-    'type' => MENU_CALLBACK,
-  );
+    $items['paymentwall_complete'] = array(
+        'title' => 'Paymentwall',
+        'page callback' => 'uc_paymentwall_complete',
+        'access arguments' => array('access content'),
+        'type' => MENU_CALLBACK,
+    );
 
-  $items['paymentwall_pingback'] = array(
-    'title' => 'Paymentwall pingback',
-    'page callback' => 'uc_paymentwall_pingbackpayment',
-    'access arguments' => array('access content'),
-    'type' => MENU_CALLBACK,
-  );
+    $items['paymentwall_pingback'] = array(
+        'title' => 'Paymentwall pingback',
+        'page callback' => 'uc_paymentwall_pingbackpayment',
+        'access arguments' => array('access content'),
+        'type' => MENU_CALLBACK,
+    );
 
-  $items['admin/store/settings/payment/method/paymentwall/save'] = array(
-    'title' => 'qwe',
-    'page callback' => 'paymentwall_save_settings_form',
-    'access arguments' => array('administer users'),
-    'type' => MENU_CALLBACK,
-  );
-
-  return $items;
+    return $items;
 }
 
 /**
  * Implements hook_uc_payment_gateway().
  */
-function uc_paymentwall_uc_payment_gateway() {
-  $gateways['uc_paymentwall_pay_gateway'] = array(
-    'title' => t('Paymentwall Gateway'),
-    'description' => t('Process payments through Paymentwall gateway'),
-  );
+function uc_paymentwall_uc_payment_gateway()
+{
+    $gateways['uc_paymentwall_pay_gateway'] = array(
+        'title' => t('Paymentwall Gateway'),
+        'description' => t('Process payments through Paymentwall gateway'),
+    );
 
-  return $gateways;
+    return $gateways;
 }
 
 /**
  * Implements hook_uc_payment_method().
  */
-function uc_paymentwall_uc_payment_method() {
+function uc_paymentwall_uc_payment_method()
+{
+    $title = theme('image', array(
+            'path' => drupal_get_path('module', 'uc_paymentwall') . '/images/logo.png'
+        )) . ' Paymentwall';
 
-  $title = theme('image', array(
-    'path' => drupal_get_path('module', 'uc_paymentwall') . '/images/logo.png'
-  )) . ' Paymentwall';
+    $methods[] = array(
+        'id' => 'paymentwall',
+        'name' => t('Paymentwall'),
+        'title' => $title,
+        'desc' => t('Pay through Paymentwall widget'),
+        'callback' => 'uc_paymentwall_method',
+        'redirect' => 'uc_paymentwall_form',
+        'weight' => 1,
+        'checkout' => true,
+    );
 
-  $methods[] = array(
-    'id' => 'paymentwall',
-    'name' => t('Paymentwall'),
-    'title' => $title,
-    'desc' => t('Pay through Paymentwall widget'),
-    'callback' => 'uc_paymentwall_method',
-    'redirect' => 'uc_paymentwall_form',
-    'weight' => 1,
-    'checkout' => TRUE,
-  );
-
-  return $methods;
+    return $methods;
 }
 
 /**
  * Callback settings method.
  */
-function uc_paymentwall_method($op, &$order) {
-  switch ($op) {
-    case 'settings':
-      $data = db_select('paymentwall_settings', 's')
-                ->fields('s')
-                ->execute()
-                ->fetchAssoc();
+function uc_paymentwall_method($op, &$order, $form = null, &$form_state = null)
+{
+    switch ($op) {
+        case 'settings':
+            $form['info'] = array(
+                '#type' => 'item',
+                '#description' => t('All data your can get from <a href="https://www.paymentwall.com/en/documentation/Ubercart/831">https://www.paymentwall.com/en/documentation/Ubercart/831</a><br>'),
+            );
 
-      $form['#action'] = url('admin/store/settings/payment/method/paymentwall/save');
+            $form['uc_pw_app_key'] = array(
+                '#type' => 'textfield',
+                '#title' => t('Project key:'),
+                '#description' => t('Your Project key.'),
+                '#default_value' => variable_get('uc_pw_app_key', ''),
+            );
 
-      $form['info'] = array(
-          '#type' => 'item',
-          '#description' => t('All data your can get from <a href="https://api.paymentwall.com/developers/applications">https://api.paymentwall.com/developers/applications</a><br>'),
-      );
+            $form['uc_pw_secret_key'] = array(
+                '#type' => 'textfield',
+                '#title' => t('Secret key:'),
+                '#description' => t('Your secret key.'),
+                '#default_value' => variable_get('uc_pw_secret_key', ''),
+            );
 
-      $form['app_key'] = array(
-        '#type' => 'textfield',
-        '#title' => t('Application key:'),
-        '#description' => t('Your application key.'),
-        '#default_value' => $data['app_key'],
-      );
+            $form['uc_pw_widget_code'] = array(
+                '#type' => 'textfield',
+                '#title' => t('Widget code:'),
+                '#description' => t('Your widget code.'),
+                '#default_value' => variable_get('uc_pw_widget_code', ''),
+            );
 
-      $form['secret_key'] = array(
-        '#type' => 'textfield',
-        '#title' => t('Secret key:'),
-        '#description' => t('Your secret key.'),
-        '#default_value' =>  $data['secret_key'],
-      );
+            $form['uc_pw_success_url'] = array(
+                '#type' => 'textfield',
+                '#title' => t('Success url:'),
+                '#description' => t('Success url.'),
+                '#default_value' => variable_get('uc_pw_success_url', ''),
+            );
 
-      $form['widget_code'] = array(
-        '#type' => 'textfield',
-        '#title' => t('Widget code:'),
-        '#description' => t('Your widget code.'),
-        '#default_value' => $data['widget_code'],
-      );
+            $form['uc_pw_test_mode'] = array(
+                '#type' => 'checkbox',
+                '#title' => t('Enable test mode'),
+                '#default_value' => variable_get('uc_pw_test_mode', false),
+            );
 
-      $form['actions']['submit'] = array(
-        '#type' => 'submit',
-        '#value' => t('Save'),
-      );
+            $form['uc_pw_delivery'] = array(
+                '#type' => 'checkbox',
+                '#title' => t('Enable Delivery Confirmation API'),
+                '#default_value' => variable_get('uc_pw_delivery', true),
+            );
 
-      return $form;
-  }
-}
+            $form['actions']['submit'] = array(
+                '#type' => 'submit',
+                '#value' => t('Save'),
+            );
 
-/**
- * Validate and save settings from admin Paymentwall settings form
- */
-function paymentwall_save_settings_form() {
-  if($_POST['app_key'] && $_POST['secret_key'] && $_POST['widget_code']) {
-    $app_key = trim($_POST['app_key']);
-    $secret_key = trim($_POST['secret_key']);
-    $widget_code = trim($_POST['widget_code']);
-
-    $result = db_update('paymentwall_settings')
-        ->fields(array(
-          'app_key' => $app_key,
-          'secret_key' => $secret_key,
-          'widget_code' => $widget_code,
-        ))
-        ->condition('id', 1)
-        ->execute();
-    if($result) {
-      drupal_set_message(t('Settings saved!'));
-    } else {
-      drupal_set_message(t('Error'), 'error');
+            return $form;
     }
-  } else {
-    drupal_set_message(t('Fill all fields'), 'error');
-  }
-
-  drupal_goto('admin/store/settings/payment/method/paymentwall');
-  die();
 }
 
 /**
  * Get order data and redirect to Paymentwall widget page.
  */
-function uc_paymentwall_form($form, &$form_state, $order) {
-  $_SESSION['order'] = base64_encode(serialize($order));
+function uc_paymentwall_form($form, &$form_state, $order)
+{
+    $_SESSION['order'] = base64_encode(serialize($order));
 
-  $form['#action'] = url('paymentwall_complete');
-  $form['actions']['submit'] = array(
-    '#type' => 'submit',
-    '#value' => t('Submit Orders'),
-  );
+    $form['#action'] = url('paymentwall_complete');
+    $form['actions']['submit'] = array(
+        '#type' => 'submit',
+        '#value' => t('Submit Orders'),
+    );
 
-  return $form;
+    return $form;
 }
 
 /**
- * @param $data
- * Init Paymentwall config
+ * Complete order on example.com/{path_to_ubercart}/paymentwall_complete
  */
-function init_paymentwall_config($data){
-  Paymentwall_Config::getInstance()->set(array(
-      'api_type' => Paymentwall_Config::API_GOODS,
-      'public_key' => $data->app_key, // available in your Paymentwall merchant area
-      'private_key' => $data->secret_key // available in your Paymentwall merchant area
-  ));
-}
+function uc_paymentwall_complete()
+{
+    switch ($_SERVER['REQUEST_METHOD']) {
+        case 'GET':
+            drupal_goto(); // Redirect to home page
+            die();
+            break;
 
-/**
- * Complate order on example.com/paymentwall_complete
- */
-function uc_paymentwall_complete() {
+        case 'POST':
+            global $user;
 
-  switch ($_SERVER['REQUEST_METHOD']) {
-    case 'GET':
-      drupal_goto();
-      die();
-      break;
+            if (isset($_SESSION['order'])) {
 
-    case 'POST':
-      if(isset($_SESSION['order'])) {
-        require 'paymentwall_api/lib/paymentwall.php';
+                initPaymentwallConfigs();
+                $orderData = unserialize(base64_decode($_SESSION['order']));
 
-        $data = db_select('paymentwall_settings', 's')
-                ->fields('s', array('app_key', 'secret_key','widget_code'))
-                ->execute()
-                ->fetch();
-        init_paymentwall_config($data);
+                // Create new Order
+                $order = uc_order_new($user->uid);
+                $orderData->order_id = $order->order_id;
 
-        $products_name  = array();
-        $order = unserialize(base64_decode($_SESSION['order']));
+                // Save order data
+                uc_order_save($orderData);
 
-        foreach ($order->products as $key => $value) {
-          if(!in_array($value->title, $products_name)) {
-            array_push($products_name, $value->title);
-          }
-        }
+                // Clear cart
+                clearShippingCart();
 
-        // for anonymoys users
-        if(!$order->uid) {
-          $order->uid = $order->primary_email;
-        }
-
-        $widget = new Paymentwall_Widget(
-          $order->uid,
-          $data->widget_code,
-          array(
-              new Paymentwall_Product(
-                  $order->order_id,
-                  number_format($order->order_total, 2, '.', ''),
-                  $order->currency,
-                  implode(', ', $products_name),
-                  Paymentwall_Product::TYPE_FIXED
-              )
-          ),
-          array(
-            'email' => $order->primary_email,
-            'integration_module' => 'ubercart'
-          )
-        );
-
-        uc_cart_empty(uc_cart_get_id());
-
-        $data = array(
-          'uid' => $order->uid,
-          'oid' => $order->order_id,
-          'order_obj' => $_SESSION['order'],
-        );
-
-        drupal_write_record('paymentwall_order_storage', $data);
-        unset($_SESSION['order']);
-        return $widget->getHtmlCode();
-      } else {
-        drupal_goto();
-        die();
-      }
-
-      break;
-  }
-}
-
-/**
- * Ping back example.com/paymentwall_pingback
- */
-function uc_paymentwall_pingbackpayment() {
-  require 'paymentwall_api/lib/paymentwall.php';
-  $data = db_select('paymentwall_settings', 's')
-          ->fields('s', array('app_key', 'secret_key'))
-          ->execute()
-          ->fetch();
-
-  init_paymentwall_config($data);
-
-  $params = $_GET;
-  if (isset($params['q']) && $params['q'] != '') {
-      unset($params['q']);
-  }
-
-  $pingback = new Paymentwall_Pingback($params, $_SERVER['REMOTE_ADDR']);
-  if ($pingback->validate()) {
-    $result = db_select('paymentwall_order_storage', 'os')
-                ->fields('os')
-                ->condition('uid', $pingback->getUserId())
-                ->condition('oid',  $pingback->getProduct()->getId())
-                ->execute()
-                ->fetchAssoc();
-
-    $order = unserialize(base64_decode($result['order_obj']));
-
-    if($order) {
-      if ($pingback->isDeliverable()) {
-
-        $id = $pingback->getProduct()->getId();
-        $method = 'Paymentwall';
-        $amount = number_format($order->order_total, 2, '.', '');
-
-        if(is_int($pingback->getUserId())) {
-          $uid = $pingback->getUserId();
-        } else {
-          $uid = 0; // for anonymoys users
-        }
-
-        $comment = 'User ' . $uid . ' complate purchase';
-
-        uc_payment_enter($id, $method, $amount, $uid, null, $comment);
-        uc_cart_complete_sale($order, variable_get('uc_new_customer_login', FALSE));
-
-      } else if ($pingback->isCancelable()) {
-        uc_order_delete($pingback->getProduct()->getId());
-      }
-    } else {
-      echo 'Get order error';
-      die();
+                return getWidgetCode($orderData);
+            } else {
+                drupal_goto();
+                die();
+            }
+            break;
     }
+}
 
-    echo 'OK';
-  } else {
-    echo $pingback->getErrorSummary();
-  }
+/**
+ * Ping back example.com/{path_to_ubercart}/paymentwall_pingback
+ */
+function uc_paymentwall_pingbackpayment()
+{
+    initPaymentwallConfigs();
+    $pingbackData = drupal_get_query_parameters(); // Do not modify variable $_GET, because some other component of drupal uses it
+    $pingback = new Paymentwall_Pingback($pingbackData, $_SERVER['REMOTE_ADDR']);
+
+    if ($pingback->validate()) {
+
+        $order = uc_order_load($pingback->getProductId());
+
+        if ($order) {
+            if ($pingback->isDeliverable()) {
+
+                $amount = number_format($order->order_total, 2, '.', '');
+                $uid = intval($pingback->getUserId());
+
+                if (variable_get('uc_pw_delivery')) {
+                    $delivery = new Paymentwall_GenerericApiObject('delivery');
+                    $response = $delivery->post(getDeliveryConfirmationData($order, $pingback->getReferenceId()));
+                }
+
+                $comment = 'User ID #' . $uid . ' completed purchase';
+                uc_payment_enter($pingback->getProductId(), UC_PAYMENT_METHOD_PAYMENTWALL, $amount, $uid, null, $comment);
+                uc_cart_complete_sale($order, variable_get('uc_new_customer_login', false));
+
+            } elseif ($pingback->isCancelable()) {
+                uc_order_action_set_status($order, array('status' => 'canceled', 'notify' => 'true'));
+                uc_order_comment_save($order->order_id, 0, 'Order canceled!', 'admin');
+            }
+        } else {
+            die('Get order error');
+        }
+
+        echo 'OK';
+    } else {
+        echo $pingback->getErrorSummary();
+    }
+}
+
+/**
+ * Initial Paymentwall Configs
+ */
+function initPaymentwallConfigs()
+{
+    Paymentwall_Config::getInstance()->set(array(
+        'api_type' => Paymentwall_Config::API_GOODS,
+        'public_key' => variable_get('uc_pw_app_key'),
+        'private_key' => variable_get('uc_pw_secret_key')
+    ));
+}
+
+/**
+ * Retrieve user data for User Profile API
+ * @param $order
+ * @return array
+ */
+function getUserProfileData($order)
+{
+    return array(
+        'customer[city]' => $order->billing_city,
+        'customer[state]' => uc_zone_get_by_id($order->billing_zone),
+        'customer[address]' => $order->billing_street1,
+        'customer[country]' => uc_country_get_by_id($order->billing_country),
+        'customer[zip]' => $order->billing_postal_code,
+        'customer[username]' => $order->primary_email,
+        'customer[firstname]' => $order->billing_first_name,
+        'customer[lastname]' => $order->billing_last_name,
+    );
+}
+
+/**
+ * Retrieve user data for User Profile API
+ * @param $order object
+ * @param $ref string Reference id
+ * @return array
+ */
+function getDeliveryConfirmationData($order, $ref)
+{
+    return array(
+        'payment_id' => $ref,
+        'type' => 'digital',
+        'status' => 'delivered',
+        'estimated_delivery_datetime' => date('Y/m/d H:i:s'),
+        'estimated_update_datetime' => date('Y/m/d H:i:s'),
+        'refundable' => 'yes',
+        'details' => 'Item will be delivered via email by ' . date('Y/m/d H:i:s'),
+        'shipping_address[email]' => $order->primary_email,
+        'shipping_address[firstname]' => $order->delivery_first_name,
+        'shipping_address[lastname]' => $order->delivery_last_name,
+        'shipping_address[country]' => uc_country_get_by_id($order->delivery_country),
+        'shipping_address[street]' => $order->delivery_street1,
+        'shipping_address[state]' => uc_zone_get_by_id($order->delivery_zone),
+        'shipping_address[zip]' => $order->billing_postal_code,
+        'shipping_address[city]' => $order->billing_city,
+        'reason' => 'none',
+        'is_test' => (variable_get('uc_pw_test_mode', false) ? 1 : 0),
+    );
+}
+
+function clearShoppingCart()
+{
+    uc_cart_empty(uc_cart_get_id());
+    unset($_SESSION['order']);
+}
+
+/**
+ * @param $products
+ * @return string
+ */
+function generateProductName($products)
+{
+    $products_name = array();
+    foreach ($products as $key => $value) {
+        if (!in_array($value->title, $products_name)) {
+            array_push($products_name, $value->title);
+        }
+    }
+    return implode(', ', $products_name);
+}
+
+/**
+ * @param $orderData
+ * @return string
+ */
+function getWidgetCode($orderData)
+{
+    $widget = new Paymentwall_Widget(
+        $orderData->uid ? $orderData->uid : $orderData->primary_email,
+        variable_get('uc_pw_widget_code'),
+        array(
+            new Paymentwall_Product(
+                $orderData->order_id,
+                number_format($orderData->order_total, 2, '.', ''),
+                $orderData->currency,
+                generateProductName($orderData->products),
+                Paymentwall_Product::TYPE_FIXED
+            )
+        ),
+        array_merge(
+            array(
+                'email' => $orderData->primary_email,
+                'integration_module' => 'ubercart',
+                'success_url' => variable_get('uc_pw_success_url'),
+                'test_mode' => variable_get('uc_pw_test_mode'),
+            ),
+            getUserProfileData($orderData)
+        )
+    );
+
+    return $widget->getHtmlCode();
 }
